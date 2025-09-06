@@ -9,7 +9,7 @@ This document provides a concise overview of the Imitune backend API for fronten
 ### **Search for Sounds**
 | Method | URL |
 | :----- | :--- |
-| `POST` | `https://imitune-backend-4f21kshwx-chris-projects-3c0d9932.vercel.app/api/search` |
+| `POST` | `https://imitune-backend-bptzlaz7e-chris-projects-3c0d9932.vercel.app/api/search` |
 
 #### **Request Body**
 Send a JSON object with the embedding vector.
@@ -54,7 +54,7 @@ The server will return an error object.
 ### **Submit User Feedback**
 | Method | URL |
 | :----- | :--- |
-| `POST` | `https://imitune-backend-4f21kshwx-chris-projects-3c0d9932.vercel.app/api/feedback` |
+| `POST` | `https://imitune-backend-bptzlaz7e-chris-projects-3c0d9932.vercel.app/api/feedback` |
 
 #### **Request Body**
 Send a JSON object with audio data and feedback ratings.
@@ -104,7 +104,7 @@ The server will return an error object.
 4. **Timeout**: Large audio files may cause timeout errors (keep under 5 minutes)
 
 ### **Base URL**
-All endpoints are served from: `https://imitune-backend-4f21kshwx-chris-projects-3c0d9932.vercel.app`
+All endpoints are served from: `https://imitune-backend-bptzlaz7e-chris-projects-3c0d9932.vercel.app`
 
 ### **CORS**
 All endpoints support CORS and can be called from web browsers.
