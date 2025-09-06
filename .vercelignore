@@ -1,0 +1,6 @@
+node_modules/
+.env
+data/
+requirements.txt
+upload_embeddings/
+package-lock.json

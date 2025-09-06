@@ -1,0 +1,4 @@
+pinecone
+numpy
+tqdm
+requests

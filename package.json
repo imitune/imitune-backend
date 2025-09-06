@@ -1,0 +1,23 @@
+{
+  "name": "imitune-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Vercel backend for Imitune to query Pinecone.",
+  "main": "api/search.js",
+  "scripts": {
+    "start": "vercel dev"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@pinecone-database/pinecone": "^2.0.1"
+  },
+  "devDependencies": {
+    "vercel": "^32.2.5"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}
+
