@@ -60,3 +60,6 @@ For a quick test, go to vercel `Settings > Deployment Protection` and disable `V
 cd upload_embeddings
 python query_test_prod.py
 ```
+
+## Done
+The created ImiTune API Reference is [here](ImiTune_API_Reference.md).
