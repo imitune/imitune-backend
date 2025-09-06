@@ -27,15 +27,13 @@ def test_feedback_api():
     # The frontend will send the audio in this Data URL format
     audio_base64 = f"data:audio/webm;base64,{base64.b64encode(audio_bytes).decode('utf-8')}"
 
-    # 3. Prepare the test payload
+    # 3. Prepare the test payload with new format
     payload = {
         "audioQuery": audio_base64,
-        "freesound_url": "https://freesound.org/people/user/sounds/12345/",
-        "ratings": {
-            "result_1_id": 5,
-            "result_2_id": 4,
-            "result_3_id": 1
-        }
+        "freesound_urls": [
+            "https://freesound.org/people/user/sounds/12345/", None, "https://freesound.org/people/user/sounds/67890/"
+        ],
+        "ratings": ["like", None, "dislike"]
     }
 
     # 4. Send the POST request to the local Vercel API
@@ -50,6 +48,17 @@ def test_feedback_api():
         print("Server response:")
         print(json.dumps(response_data, indent=2))
 
+        # 6. Print the expected storage format
+        print("\n📦 Expected storage format in metadata:")
+        expected_metadata = {
+            "audioUrl": response_data.get("audioUrl", "URL_WILL_BE_HERE"),
+            "audioId": response_data.get("audioId", "ID_WILL_BE_HERE"),
+            "freesound_urls": payload["freesound_urls"],
+            "ratings": payload["ratings"],
+            "createdAt": "TIMESTAMP_WILL_BE_HERE"
+        }
+        print(json.dumps(expected_metadata, indent=2))
+
     except requests.exceptions.RequestException as e:
         print(f"\n❌ An error occurred while communicating with the server:")
         print(e)
@@ -59,12 +68,3 @@ def test_feedback_api():
 
 if __name__ == "__main__":
     test_feedback_api()
-# ```
-
-# #### 3단계: 테스트 실행하기
-
-# 1.  **라이브러리 설치:** `package.json` 파일이 변경되었으므로, 터미널에서 `npm install`을 다시 실행하여 `@vercel/blob`과 `uuid` 라이브러리를 설치합니다.
-# 2.  **서버 실행:** 하나의 터미널 창에서 `vercel dev`를 실행하여 로컬 서버를 켭니다.
-# 3.  **테스트 실행:** **별도의 새 터미널 창**을 열고, `imitune-backend` 폴더에서 아래 명령어를 실행하여 피드백 API 테스트를 시작하세요!
-#     ```bash
-#     python feedback_test.py

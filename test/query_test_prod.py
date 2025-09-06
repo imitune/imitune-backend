@@ -5,7 +5,7 @@ import random
 
 # --- Configuration ---
 # This is the real, deployed production URL for your Vercel API
-VERCEL_API_URL = "https://imitune-backend-4f21kshwx-chris-projects-3c0d9932.vercel.app/api/search"
+VERCEL_API_URL = "https://imitune-backend-2cjbmcfcb-chris-projects-3c0d9932.vercel.app/api/search"
 JSON_FILE = "../data/embeddings.json"
 
 
