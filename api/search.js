@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     }
 
     const queryResponse = await index.query({
-      topK: 5,
+      topK: 3,
       vector: embedding,
       includeMetadata: true,
     });

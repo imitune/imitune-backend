@@ -8,7 +8,7 @@ This document provides a concise overview of the Imitune backend API for fronten
 
 | Method | URL                                                                                  |
 | :----- | :----------------------------------------------------------------------------------- |
-| `POST` | `https://imitune-backend-ek2udc5sb-chris-projects-3c0d9932.vercel.app/api/search` |
+| `POST` | `https://imitune-backend-4f21kshwx-chris-projects-3c0d9932.vercel.app/api/search` |
 
 ---
 
