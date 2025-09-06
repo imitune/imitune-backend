@@ -40,6 +40,7 @@ vercel dev
 # Open another terminal & test search
 cd test
 query_test.py
+feedback_test.py
 ```
 
 ## Deploy vercel product
@@ -51,15 +52,22 @@ Then you will see the deployed vercel product info like this:
 ```
 ✅  Production: https://imitune-ba....1234.vercel.app 
 ```
-The API is `https://imitune-ba....1234.vercel.app/api/search` (add `/api/search`).
-Next, modify the `VERCEL_API_URL` in `upload_embeddings/query_test_prod.py`.
+The API is `https://imitune-ba....1234.vercel.app/api/search` (add `/api/search` or `/api/feedback`).
+Next, modify the `VERCEL_API_URL` in `test/query_test_prod.py` and `test/feedback_test_prod.py`.
+Also make sure of adding keys (`BLOB_READ_WRITE_TOKEN`, `PINECONE_API_KEY`, `PINECONE_ENVIRONMENT`)
+in `Dashboard > Settings > Environment Variables`.  
 For a quick test, go to vercel `Settings > Deployment Protection` and disable `Vercel Authentication`.
 
 ```
 # Test the deployed vercel server search
 cd test
 python query_test_prod.py
+python feedback_test_prod.py
 ```
 
-## Done
-The created ImiTune API Reference is [here](ImiTune_API_Reference.md).
+## Done!!
+- ImiTune API Reference is [here](ImiTune_API_Reference.md).
+- Example code for Frontend Integration is [here](Frontend_Integration_Guidline.md)
+
+---
+*Last Updated: September 2025 Sat 6 23:35*
