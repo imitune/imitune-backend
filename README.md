@@ -38,7 +38,7 @@ vercel dev
 
 ```bash
 # Open another terminal & test search
-cd upload_embeddings
+cd test
 query_test.py
 ```
 
@@ -57,7 +57,7 @@ For a quick test, go to vercel `Settings > Deployment Protection` and disable `V
 
 ```
 # Test the deployed vercel server search
-cd upload_embeddings
+cd test
 python query_test_prod.py
 ```
 
