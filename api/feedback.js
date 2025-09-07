@@ -1,65 +1,35 @@
 import { put } from '@vercel/blob';
 import { v4 as uuidv4 } from 'uuid';
 
-// --- CORS helper (mirrors search.js) ---------------------------------------
-function setCors(res, origin) {
-  res.setHeader('Vary', 'Origin');
-  if (origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Max-Age', '86400');
-}
-
-function resolveOrigin(req) {
-  const origin = req.headers.origin;
-  if (!origin) return '*';
-  const allowed = [
-    'http://localhost:5173',
-    'http://localhost:5173/imitune-frontend',
-    'https://imitune.github.io'
-  ];
-  return allowed.includes(origin) ? origin : '*';
-}
-
 export default async function handler(req, res) {
-  const origin = resolveOrigin(req);
-  if (req.method === 'OPTIONS') {
-    setCors(res, origin);
-    return res.status(204).end();
-  }
-  // Only accept POST requests
-  if (req.method !== 'POST') {
-    setCors(res, origin);
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
   try {
     const { audioQuery, freesound_urls, ratings } = req.body;
 
     // Validate required fields
-    if (!audioQuery || !freesound_urls || !ratings) {
-      setCors(res, origin);
+  if (!audioQuery || !freesound_urls || !ratings) {
       return res.status(400).json({ error: 'Missing required fields: audioQuery, freesound_urls, ratings' });
     }
 
     // Check if both are arrays
     if (!Array.isArray(freesound_urls) || !Array.isArray(ratings)) {
-  setCors(res, origin);
   return res.status(400).json({ error: 'freesound_urls and ratings must be arrays' });
     }
 
     // Check if arrays have the same length
     if (freesound_urls.length !== ratings.length) {
-  setCors(res, origin);
   return res.status(400).json({ error: 'freesound_urls and ratings arrays must have the same length' });
     }
 
     // Validate rating values (like, dislike, or null only)
     for (const rating of ratings) {
       if (rating !== null && rating !== 'like' && rating !== 'dislike') {
-  setCors(res, origin);
   return res.status(400).json({ error: 'Each rating must be either "like", "dislike", or null' });
       }
     }
@@ -97,7 +67,6 @@ export default async function handler(req, res) {
     console.log(`Successfully uploaded metadata to: ${blobMetaUrl}`);
 
     // --- 3. Send Success Response ---
-  setCors(res, origin);
   return res.status(200).json({ 
       message: 'Feedback submitted successfully', 
       audioId: uniqueId,
@@ -107,7 +76,6 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Error occurred while handling feedback:', error);
-  setCors(res, origin);
   return res.status(500).json({ error: 'Internal server error' });
   }
 }
