@@ -13,7 +13,7 @@ You can skip this, once done.
 First make sure `fsd_embeddings.npy` and `fsd50k_with_freesound_utls.csv` in `/data`.
 ```
 pip install -r requirements.txt
-cd upload
+cd db_manager
 upload.py
 ```
 
