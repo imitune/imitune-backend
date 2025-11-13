@@ -15,9 +15,27 @@ export default async function handler(req, res) {
 
   try {
     const { embedding } = req.body;
+    
+    // SECURITY: Validate embedding exists and is an array
     if (!embedding || !Array.isArray(embedding)) {
       return res.status(400).json({ error: 'Missing or invalid embedding vector' });
     }
+
+    // SECURITY: Validate embedding size (adjust based on your model - common sizes: 128, 256, 512, 1024)
+    const MIN_EMBEDDING_SIZE = 32;
+    const MAX_EMBEDDING_SIZE = 2048;
+    if (embedding.length < MIN_EMBEDDING_SIZE || embedding.length > MAX_EMBEDDING_SIZE) {
+      return res.status(400).json({ 
+        error: `Invalid embedding size. Expected between ${MIN_EMBEDDING_SIZE} and ${MAX_EMBEDDING_SIZE}, got ${embedding.length}` 
+      });
+    }
+
+    // SECURITY: Validate all values are valid numbers
+    if (!embedding.every(v => typeof v === 'number' && !isNaN(v) && isFinite(v))) {
+      return res.status(400).json({ error: 'Embedding contains invalid values (must be finite numbers)' });
+    }
+
+    console.log(`[Search] Embedding size: ${embedding.length}`);
 
     const queryResponse = await index.query({
       topK: 3,

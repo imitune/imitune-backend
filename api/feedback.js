@@ -17,6 +17,40 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing required fields: audioQuery, freesound_urls, ratings' });
     }
 
+    // SECURITY: Validate data URL format and content type
+    if (typeof audioQuery !== 'string' || !audioQuery.startsWith('data:audio/')) {
+      return res.status(400).json({ error: 'Invalid audio format. Must be a data URL with audio MIME type.' });
+    }
+
+    // SECURITY: Validate audio MIME type (webm, wav, mp3, ogg)
+    const mimeMatch = audioQuery.match(/^data:(audio\/(?:webm|wav|mp3|ogg|mpeg));base64,/);
+    if (!mimeMatch) {
+      return res.status(400).json({ 
+        error: 'Unsupported audio format. Supported formats: webm, wav, mp3, ogg.' 
+      });
+    }
+    const contentType = mimeMatch[1];
+
+    // SECURITY: Extract and validate base64 data
+    const base64Data = audioQuery.split(',')[1];
+    if (!base64Data) {
+      return res.status(400).json({ error: 'Invalid audio data: missing base64 content.' });
+    }
+
+    // SECURITY: Check file size (limit to 10MB)
+    const sizeInBytes = (base64Data.length * 3) / 4; // Base64 to binary size estimation
+    const maxSizeInBytes = 10 * 1024 * 1024; // 10 MB
+    
+    if (sizeInBytes > maxSizeInBytes) {
+      return res.status(413).json({ 
+        error: `Audio file too large. Maximum size is 10MB, received ${(sizeInBytes / (1024 * 1024)).toFixed(2)}MB.` 
+      });
+    }
+
+    // Log upload size for monitoring
+    console.log(`[Feedback] Audio upload: ${(sizeInBytes / 1024).toFixed(2)}KB, type: ${contentType}`);
+
+
     // Check if both are arrays
     if (!Array.isArray(freesound_urls) || !Array.isArray(ratings)) {
   return res.status(400).json({ error: 'freesound_urls and ratings must be arrays' });
@@ -37,13 +71,13 @@ export default async function handler(req, res) {
     // --- 1. Upload Audio to Vercel Blob ---
     // Generate unique ID for audio query
     const uniqueId = uuidv4();
-    const audioBuffer = Buffer.from(audioQuery.split(',')[1], 'base64');
+    const audioBuffer = Buffer.from(base64Data, 'base64');
     const audioFileName = `feedback-audio-${uniqueId}.webm`;
     
-    // Upload audio file
+    // Upload audio file with validated content type
     const { url: blobAudioUrl } = await put(audioFileName, audioBuffer, {
       access: 'public',
-      contentType: 'audio/webm',
+      contentType: contentType,
     });
     
     console.log(`Successfully uploaded audio to: ${blobAudioUrl}`);
