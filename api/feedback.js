@@ -90,9 +90,10 @@ export default async function handler(req, res) {
     const audioBuffer = Buffer.from(base64Data, 'base64');
     const audioFileName = `feedback-audio-${uniqueId}.webm`;
     
-    // Upload audio file with validated content type
+    // SECURITY: Upload audio file as PRIVATE (not publicly accessible)
+    // Files can only be accessed with authentication or signed URLs
     const { url: blobAudioUrl } = await put(audioFileName, audioBuffer, {
-      access: 'public',
+      access: 'private',
       contentType: contentType,
     });
     
@@ -110,8 +111,9 @@ export default async function handler(req, res) {
     };
 
     // Upload metadata JSON file
+    // SECURITY: Keep metadata private to protect participant information
     const { url: blobMetaUrl } = await put(metadataFileName, JSON.stringify(metadata, null, 2), {
-      access: 'public',
+      access: 'private',
       contentType: 'application/json',
     });
     console.log(`Successfully uploaded metadata to: ${blobMetaUrl}`);
