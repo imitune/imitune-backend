@@ -1,13 +1,15 @@
 import { put } from '@vercel/blob';
 import { v4 as uuidv4 } from 'uuid';
+import { handleCorsPreflightAndValidate } from './utils/cors.js';
 import { checkFeedbackRateLimit, getClientIp, setRateLimitHeaders } from './utils/ratelimit.js';
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.setHeader('Access-Control-Max-Age', '86400');
-  if (req.method === 'OPTIONS') return res.status(204).end();
+  // SECURITY: Validate origin and set CORS headers
+  const corsHandled = handleCorsPreflightAndValidate(req, res, {
+    methods: 'POST,OPTIONS',
+  });
+  if (corsHandled) return; // Either preflight response sent or origin blocked
+  
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
   // SECURITY: Rate limiting - 10 submissions per hour per IP
