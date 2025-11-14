@@ -9,7 +9,7 @@ import json
 
 import requests
 
-BASE_URL = "http://localhost:3001"  # Changed from 3000 to 3001
+BASE_URL = "http://localhost:3000"
 SEARCH_URL = f"{BASE_URL}/api/search"
 FEEDBACK_URL = f"{BASE_URL}/api/feedback"
 

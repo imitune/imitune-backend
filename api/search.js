@@ -1,4 +1,5 @@
 import { Pinecone } from '@pinecone-database/pinecone';
+import { checkSearchRateLimit, getClientIp, setRateLimitHeaders } from './utils/ratelimit.js';
 
 const pinecone = new Pinecone();
 const indexName = 'imitune-search';
@@ -12,6 +13,21 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Max-Age', '86400');
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
+
+  // SECURITY: Rate limiting - 10 requests per minute per IP
+  const clientIp = getClientIp(req);
+  const rateLimit = await checkSearchRateLimit(clientIp);
+  setRateLimitHeaders(res, rateLimit);
+  
+  if (!rateLimit.success) {
+    console.log(`[Search] Rate limit exceeded for IP: ${clientIp}`);
+    return res.status(429).json({ 
+      error: 'Too many requests. Please try again later.',
+      retryAfter: Math.ceil((rateLimit.reset - Date.now()) / 1000)
+    });
+  }
+  
+  console.log(`[Search] Request from IP: ${clientIp}, remaining: ${rateLimit.remaining}/${rateLimit.limit}`);
 
   try {
     const { embedding } = req.body;

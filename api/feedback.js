@@ -1,5 +1,6 @@
 import { put } from '@vercel/blob';
 import { v4 as uuidv4 } from 'uuid';
+import { checkFeedbackRateLimit, getClientIp, setRateLimitHeaders } from './utils/ratelimit.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -8,6 +9,21 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Max-Age', '86400');
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
+
+  // SECURITY: Rate limiting - 10 submissions per hour per IP
+  const clientIp = getClientIp(req);
+  const rateLimit = await checkFeedbackRateLimit(clientIp);
+  setRateLimitHeaders(res, rateLimit);
+  
+  if (!rateLimit.success) {
+    console.log(`[Feedback] Rate limit exceeded for IP: ${clientIp}`);
+    return res.status(429).json({ 
+      error: 'Too many feedback submissions. Please try again later.',
+      retryAfter: Math.ceil((rateLimit.reset - Date.now()) / 1000)
+    });
+  }
+  
+  console.log(`[Feedback] Request from IP: ${clientIp}, remaining: ${rateLimit.remaining}/${rateLimit.limit}`);
 
   try {
     const { audioQuery, freesound_urls, ratings } = req.body;
