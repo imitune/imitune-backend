@@ -1,4 +1,4 @@
-import { Pinecone, Index } from '@pinecone-database/pinecone';
+import { Pinecone } from '@pinecone-database/pinecone';
 import { handleCorsPreflightAndValidate } from './utils/cors.js';
 import { checkSearchRateLimit, getClientIp, setRateLimitHeaders } from './utils/ratelimit.js';
 
@@ -7,6 +7,10 @@ const indexName = 'imitune-search';
 // Set PINECONE_INDEX_HOST in Vercel environment variables
 // Get the host URL from: Pinecone Dashboard -> Your Index -> Host
 const indexHost = process.env.PINECONE_INDEX_HOST;
+
+// #region agent log
+console.log('[DEBUG-A] Module load - env vars:', JSON.stringify({ hasIndexHost: !!indexHost, indexHostLength: indexHost?.length, indexHostPrefix: indexHost?.substring(0, 20), hasApiKey: !!process.env.PINECONE_API_KEY, codeVersion: 'v3-correct-api' }));
+// #endregion
 
 export default async function handler(req, res) {
   // SECURITY: Validate origin and set CORS headers
@@ -34,6 +38,10 @@ export default async function handler(req, res) {
 
   try {
     const apiKey = process.env.PINECONE_API_KEY;
+    // #region agent log
+    console.log('[DEBUG-B] Handler entry - env check:', JSON.stringify({ hasApiKey: !!apiKey, apiKeyLen: apiKey?.length, hasIndexHost: !!indexHost, indexHost: indexHost }));
+    // #endregion
+    
     // Initialize Pinecone client on each request to ensure fresh connection
     if (!apiKey) {
       console.error('[Search] ERROR: PINECONE_API_KEY environment variable is not set!');
@@ -43,19 +51,39 @@ export default async function handler(req, res) {
     }
     
     if (!indexHost) {
+      // #region agent log
+      console.log('[DEBUG-C] indexHost is falsy, returning error');
+      // #endregion
       console.error('[Search] ERROR: PINECONE_INDEX_HOST environment variable is not set!');
       return res.status(500).json({ 
         error: 'Server configuration error: Pinecone index host not configured' 
       });
     }
     
+    // #region agent log
+    console.log('[DEBUG-D] About to create Pinecone client');
+    // #endregion
+    
     // Initialize Pinecone client and use host from environment variable to bypass control plane lookup
     const pinecone = new Pinecone({ apiKey });
-    const index = new Index({
-      apiKey: apiKey,
-      host: indexHost,
-      name: indexName
-    });
+    
+    // #region agent log
+    console.log('[DEBUG-E] Pinecone client created, about to get index with host:', indexHost);
+    // #endregion
+    
+    // Use pinecone.index(name, host) syntax - passing host as second argument bypasses control plane
+    // Ensure host has https:// prefix
+    const fullHost = indexHost.startsWith('https://') ? indexHost : `https://${indexHost}`;
+    
+    // #region agent log
+    console.log('[DEBUG-E2] Full host URL:', fullHost);
+    // #endregion
+    
+    const index = pinecone.index(indexName, fullHost);
+    
+    // #region agent log
+    console.log('[DEBUG-F] Index reference obtained successfully');
+    // #endregion
     
     const { embedding } = req.body;
     
@@ -80,6 +108,10 @@ export default async function handler(req, res) {
 
     console.log(`[Search] Embedding size: ${embedding.length}`);
 
+    // #region agent log
+    console.log('[DEBUG-H] About to call index.query()');
+    // #endregion
+    
     const queryResponse = await index.query({
       topK: 3,
       vector: embedding,
@@ -97,6 +129,9 @@ export default async function handler(req, res) {
   return res.status(200).json({ results });
 
   } catch (error) {
+    // #region agent log
+    console.log('[DEBUG-G] Error caught:', JSON.stringify({ name: error.name, message: error.message, stack: error.stack?.substring(0, 500) }));
+    // #endregion
     console.error('[Search] Error occurred:', error);
     return res.status(500).json({ 
       error: 'An internal server error occurred. Please try again later.' 
