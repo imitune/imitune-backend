@@ -1,17 +1,17 @@
-// Using direct REST API to Pinecone to bypass SDK control plane issues
 import { handleCorsPreflightAndValidate } from './utils/cors.js';
 import { checkSearchRateLimit, getClientIp, setRateLimitHeaders } from './utils/ratelimit.js';
 
-// #region agent log
-console.error('[DEBUG-A] Module load v4-direct-api');
-// #endregion
+// Pinecone configuration from environment variables
+// PINECONE_INDEX_HOST bypasses the control plane lookup for faster, more reliable queries
+const apiKey = process.env.PINECONE_API_KEY;
+const indexHost = process.env.PINECONE_INDEX_HOST;
 
 export default async function handler(req, res) {
   // SECURITY: Validate origin and set CORS headers
   const corsHandled = handleCorsPreflightAndValidate(req, res, {
     methods: 'POST,OPTIONS',
   });
-  if (corsHandled) return; // Either preflight response sent or origin blocked
+  if (corsHandled) return;
   
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
@@ -31,13 +31,6 @@ export default async function handler(req, res) {
   console.log(`[Search] Request from IP: ${clientIp}, remaining: ${rateLimit.remaining}/${rateLimit.limit}`);
 
   try {
-    const apiKey = process.env.PINECONE_API_KEY;
-    const indexHost = process.env.PINECONE_INDEX_HOST;
-    
-    // #region agent log
-    console.error('[DEBUG-B] Env check:', JSON.stringify({ hasApiKey: !!apiKey, hasHost: !!indexHost, hostValue: indexHost }));
-    // #endregion
-    
     if (!apiKey) {
       console.error('[Search] ERROR: PINECONE_API_KEY not set');
       return res.status(500).json({ error: 'Server configuration error: Pinecone API key not configured' });
@@ -55,7 +48,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing or invalid embedding vector' });
     }
 
-    // SECURITY: Validate embedding size
+    // SECURITY: Validate embedding size (model outputs 960 dimensions)
     const MIN_EMBEDDING_SIZE = 32;
     const MAX_EMBEDDING_SIZE = 2048;
     if (embedding.length < MIN_EMBEDDING_SIZE || embedding.length > MAX_EMBEDDING_SIZE) {
@@ -71,16 +64,9 @@ export default async function handler(req, res) {
 
     console.log(`[Search] Embedding size: ${embedding.length}`);
 
-    // Build the Pinecone query URL - direct to index host, bypassing control plane entirely
+    // Direct REST API call to Pinecone (bypasses SDK control plane lookup)
     const host = indexHost.startsWith('https://') ? indexHost : `https://${indexHost}`;
-    const queryUrl = `${host}/query`;
-    
-    // #region agent log
-    console.error('[DEBUG-C] About to call Pinecone REST API:', queryUrl);
-    // #endregion
-
-    // Direct REST API call to Pinecone
-    const response = await fetch(queryUrl, {
+    const response = await fetch(`${host}/query`, {
       method: 'POST',
       headers: {
         'Api-Key': apiKey,
@@ -93,10 +79,6 @@ export default async function handler(req, res) {
       }),
     });
 
-    // #region agent log
-    console.error('[DEBUG-D] Pinecone response status:', response.status);
-    // #endregion
-
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[Search] Pinecone API error:', response.status, errorText);
@@ -105,11 +87,7 @@ export default async function handler(req, res) {
 
     const queryResponse = await response.json();
 
-    // #region agent log
-    console.error('[DEBUG-E] Query success, matches:', queryResponse.matches?.length);
-    // #endregion
-
-    // Process the results to match the new required format
+    // Process the results to match the required format
     const results = (queryResponse.matches || []).map(match => ({
       id: match.id,
       score: match.score,
@@ -119,13 +97,9 @@ export default async function handler(req, res) {
     return res.status(200).json({ results });
 
   } catch (error) {
-    // #region agent log
-    console.error('[DEBUG-ERR] Error:', error.message);
-    // #endregion
     console.error('[Search] Error occurred:', error);
     return res.status(500).json({ 
       error: 'An internal server error occurred. Please try again later.' 
     });
   }
 }
-
