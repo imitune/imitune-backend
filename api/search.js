@@ -1,8 +1,12 @@
-import { Pinecone } from '@pinecone-database/pinecone';
+import { Pinecone, Index } from '@pinecone-database/pinecone';
 import { handleCorsPreflightAndValidate } from './utils/cors.js';
 import { checkSearchRateLimit, getClientIp, setRateLimitHeaders } from './utils/ratelimit.js';
 
 const indexName = 'imitune-search';
+// Index host from environment variable to bypass control plane lookup
+// Set PINECONE_INDEX_HOST in Vercel environment variables
+// Get the host URL from: Pinecone Dashboard -> Your Index -> Host
+const indexHost = process.env.PINECONE_INDEX_HOST;
 
 export default async function handler(req, res) {
   // SECURITY: Validate origin and set CORS headers
@@ -29,9 +33,29 @@ export default async function handler(req, res) {
   console.log(`[Search] Request from IP: ${clientIp}, remaining: ${rateLimit.remaining}/${rateLimit.limit}`);
 
   try {
+    const apiKey = process.env.PINECONE_API_KEY;
     // Initialize Pinecone client on each request to ensure fresh connection
-    const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
-    const index = pinecone.index(indexName);
+    if (!apiKey) {
+      console.error('[Search] ERROR: PINECONE_API_KEY environment variable is not set!');
+      return res.status(500).json({ 
+        error: 'Server configuration error: Pinecone API key not configured' 
+      });
+    }
+    
+    if (!indexHost) {
+      console.error('[Search] ERROR: PINECONE_INDEX_HOST environment variable is not set!');
+      return res.status(500).json({ 
+        error: 'Server configuration error: Pinecone index host not configured' 
+      });
+    }
+    
+    // Initialize Pinecone client and use host from environment variable to bypass control plane lookup
+    const pinecone = new Pinecone({ apiKey });
+    const index = new Index({
+      apiKey: apiKey,
+      host: indexHost,
+      name: indexName
+    });
     
     const { embedding } = req.body;
     
@@ -73,8 +97,10 @@ export default async function handler(req, res) {
   return res.status(200).json({ results });
 
   } catch (error) {
-    console.error('An error occurred:', error);
-  return res.status(500).json({ error: 'An internal server error occurred.', details: error.message });
+    console.error('[Search] Error occurred:', error);
+    return res.status(500).json({ 
+      error: 'An internal server error occurred. Please try again later.' 
+    });
   }
 }
 
