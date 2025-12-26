@@ -1,15 +1,9 @@
-import { Pinecone } from '@pinecone-database/pinecone';
+// Using direct REST API to Pinecone to bypass SDK control plane issues
 import { handleCorsPreflightAndValidate } from './utils/cors.js';
 import { checkSearchRateLimit, getClientIp, setRateLimitHeaders } from './utils/ratelimit.js';
 
-const indexName = 'imitune-search';
-// Index host from environment variable to bypass control plane lookup
-// Set PINECONE_INDEX_HOST in Vercel environment variables
-// Get the host URL from: Pinecone Dashboard -> Your Index -> Host
-const indexHost = process.env.PINECONE_INDEX_HOST;
-
 // #region agent log
-console.log('[DEBUG-A] Module load - env vars:', JSON.stringify({ hasIndexHost: !!indexHost, indexHostLength: indexHost?.length, indexHostPrefix: indexHost?.substring(0, 20), hasApiKey: !!process.env.PINECONE_API_KEY, codeVersion: 'v3-correct-api' }));
+console.error('[DEBUG-A] Module load v4-direct-api');
 // #endregion
 
 export default async function handler(req, res) {
@@ -38,53 +32,22 @@ export default async function handler(req, res) {
 
   try {
     const apiKey = process.env.PINECONE_API_KEY;
+    const indexHost = process.env.PINECONE_INDEX_HOST;
+    
     // #region agent log
-    console.log('[DEBUG-B] Handler entry - env check:', JSON.stringify({ hasApiKey: !!apiKey, apiKeyLen: apiKey?.length, hasIndexHost: !!indexHost, indexHost: indexHost }));
+    console.error('[DEBUG-B] Env check:', JSON.stringify({ hasApiKey: !!apiKey, hasHost: !!indexHost, hostValue: indexHost }));
     // #endregion
     
-    // Initialize Pinecone client on each request to ensure fresh connection
     if (!apiKey) {
-      console.error('[Search] ERROR: PINECONE_API_KEY environment variable is not set!');
-      return res.status(500).json({ 
-        error: 'Server configuration error: Pinecone API key not configured' 
-      });
+      console.error('[Search] ERROR: PINECONE_API_KEY not set');
+      return res.status(500).json({ error: 'Server configuration error: Pinecone API key not configured' });
     }
     
     if (!indexHost) {
-      // #region agent log
-      console.log('[DEBUG-C] indexHost is falsy, returning error');
-      // #endregion
-      console.error('[Search] ERROR: PINECONE_INDEX_HOST environment variable is not set!');
-      return res.status(500).json({ 
-        error: 'Server configuration error: Pinecone index host not configured' 
-      });
+      console.error('[Search] ERROR: PINECONE_INDEX_HOST not set');
+      return res.status(500).json({ error: 'Server configuration error: Pinecone index host not configured' });
     }
-    
-    // #region agent log
-    console.log('[DEBUG-D] About to create Pinecone client');
-    // #endregion
-    
-    // Initialize Pinecone client and use host from environment variable to bypass control plane lookup
-    const pinecone = new Pinecone({ apiKey });
-    
-    // #region agent log
-    console.log('[DEBUG-E] Pinecone client created, about to get index with host:', indexHost);
-    // #endregion
-    
-    // Use pinecone.index(name, host) syntax - passing host as second argument bypasses control plane
-    // Ensure host has https:// prefix
-    const fullHost = indexHost.startsWith('https://') ? indexHost : `https://${indexHost}`;
-    
-    // #region agent log
-    console.log('[DEBUG-E2] Full host URL:', fullHost);
-    // #endregion
-    
-    const index = pinecone.index(indexName, fullHost);
-    
-    // #region agent log
-    console.log('[DEBUG-F] Index reference obtained successfully');
-    // #endregion
-    
+
     const { embedding } = req.body;
     
     // SECURITY: Validate embedding exists and is an array
@@ -92,7 +55,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing or invalid embedding vector' });
     }
 
-    // SECURITY: Validate embedding size (adjust based on your model - common sizes: 128, 256, 512, 1024)
+    // SECURITY: Validate embedding size
     const MIN_EMBEDDING_SIZE = 32;
     const MAX_EMBEDDING_SIZE = 2048;
     if (embedding.length < MIN_EMBEDDING_SIZE || embedding.length > MAX_EMBEDDING_SIZE) {
@@ -108,29 +71,56 @@ export default async function handler(req, res) {
 
     console.log(`[Search] Embedding size: ${embedding.length}`);
 
-    // #region agent log
-    console.log('[DEBUG-H] About to call index.query()');
-    // #endregion
+    // Build the Pinecone query URL - direct to index host, bypassing control plane entirely
+    const host = indexHost.startsWith('https://') ? indexHost : `https://${indexHost}`;
+    const queryUrl = `${host}/query`;
     
-    const queryResponse = await index.query({
-      topK: 3,
-      vector: embedding,
-      includeMetadata: true,
+    // #region agent log
+    console.error('[DEBUG-C] About to call Pinecone REST API:', queryUrl);
+    // #endregion
+
+    // Direct REST API call to Pinecone
+    const response = await fetch(queryUrl, {
+      method: 'POST',
+      headers: {
+        'Api-Key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        topK: 3,
+        vector: embedding,
+        includeMetadata: true,
+      }),
     });
 
+    // #region agent log
+    console.error('[DEBUG-D] Pinecone response status:', response.status);
+    // #endregion
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Search] Pinecone API error:', response.status, errorText);
+      throw new Error(`Pinecone API error: ${response.status} - ${errorText}`);
+    }
+
+    const queryResponse = await response.json();
+
+    // #region agent log
+    console.error('[DEBUG-E] Query success, matches:', queryResponse.matches?.length);
+    // #endregion
+
     // Process the results to match the new required format
-    const results = queryResponse.matches.map(match => ({
+    const results = (queryResponse.matches || []).map(match => ({
       id: match.id,
       score: match.score,
-      // Retrieve the full URL directly from metadata
       freesound_url: match.metadata?.freesound_url || '',
     }));
 
-  return res.status(200).json({ results });
+    return res.status(200).json({ results });
 
   } catch (error) {
     // #region agent log
-    console.log('[DEBUG-G] Error caught:', JSON.stringify({ name: error.name, message: error.message, stack: error.stack?.substring(0, 500) }));
+    console.error('[DEBUG-ERR] Error:', error.message);
     // #endregion
     console.error('[Search] Error occurred:', error);
     return res.status(500).json({ 
