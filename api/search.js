@@ -2,9 +2,7 @@ import { Pinecone } from '@pinecone-database/pinecone';
 import { handleCorsPreflightAndValidate } from './utils/cors.js';
 import { checkSearchRateLimit, getClientIp, setRateLimitHeaders } from './utils/ratelimit.js';
 
-const pinecone = new Pinecone();
 const indexName = 'imitune-search';
-const index = pinecone.index(indexName);
 
 export default async function handler(req, res) {
   // SECURITY: Validate origin and set CORS headers
@@ -31,6 +29,10 @@ export default async function handler(req, res) {
   console.log(`[Search] Request from IP: ${clientIp}, remaining: ${rateLimit.remaining}/${rateLimit.limit}`);
 
   try {
+    // Initialize Pinecone client on each request to ensure fresh connection
+    const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
+    const index = pinecone.index(indexName);
+    
     const { embedding } = req.body;
     
     // SECURITY: Validate embedding exists and is an array
