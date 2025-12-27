@@ -92,14 +92,17 @@ export default async function handler(req, res) {
     const audioBuffer = Buffer.from(base64Data, 'base64');
     const audioFileName = `feedback-audio-${uniqueId}.webm`;
     
-    // SECURITY: Upload audio file as PRIVATE (not publicly accessible)
-    // Files can only be accessed with authentication or signed URLs
+    console.log(`[Feedback] Attempting to upload audio file: ${audioFileName}, size: ${audioBuffer.length} bytes`);
+    
+    // Upload audio file as public (required by Blob store configuration)
+    // Note: Random suffix is added by default to make URLs unguessable
     const { url: blobAudioUrl } = await put(audioFileName, audioBuffer, {
-      access: 'private',
+      access: 'public',
       contentType: contentType,
+      addRandomSuffix: true, // Explicit: adds random suffix to prevent URL guessing
     });
     
-    console.log(`Successfully uploaded audio to: ${blobAudioUrl}`);
+    console.log(`[Feedback] Successfully uploaded audio to: ${blobAudioUrl}`);
 
     // --- 2. Store Metadata as JSON file in Vercel Blob ---
     const metadataFileName = `feedback-meta-${uniqueId}.json`;
@@ -113,12 +116,13 @@ export default async function handler(req, res) {
     };
 
     // Upload metadata JSON file
-    // SECURITY: Keep metadata private to protect participant information
+    // Note: Random suffix is added by default to make URLs unguessable
     const { url: blobMetaUrl } = await put(metadataFileName, JSON.stringify(metadata, null, 2), {
-      access: 'private',
+      access: 'public',
       contentType: 'application/json',
+      addRandomSuffix: true, // Explicit: adds random suffix to prevent URL guessing
     });
-    console.log(`Successfully uploaded metadata to: ${blobMetaUrl}`);
+    console.log(`[Feedback] Successfully uploaded metadata to: ${blobMetaUrl}`);
 
     // --- 3. Send Success Response ---
   return res.status(200).json({ 
@@ -129,7 +133,23 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Error occurred while handling feedback:', error);
-  return res.status(500).json({ error: 'Internal server error' });
+    console.error('[Feedback] Error occurred while handling feedback:', error);
+    console.error('[Feedback] Error name:', error?.name);
+    console.error('[Feedback] Error message:', error?.message);
+    console.error('[Feedback] Error stack:', error?.stack);
+    
+    // Provide more specific error messages for common issues
+    let errorMessage = 'Internal server error';
+    let statusCode = 500;
+    
+    if (error?.message?.includes('BLOB_READ_WRITE_TOKEN')) {
+      errorMessage = 'Storage configuration error. Please contact support.';
+      console.error('[Feedback] CRITICAL: Vercel Blob token not configured!');
+    } else if (error?.name === 'BlobError' || error?.message?.includes('blob')) {
+      errorMessage = 'Failed to store feedback. Please try again.';
+      console.error('[Feedback] Blob storage error:', error);
+    }
+    
+    return res.status(statusCode).json({ error: errorMessage });
   }
 }
