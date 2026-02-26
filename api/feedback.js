@@ -12,20 +12,20 @@ export default async function handler(req, res) {
   
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
-  // SECURITY: Rate limiting - 10 submissions per hour per IP
-  const clientIp = getClientIp(req);
-  const rateLimit = await checkFeedbackRateLimit(clientIp);
-  setRateLimitHeaders(res, rateLimit);
-  
-  if (!rateLimit.success) {
-    console.log(`[Feedback] Rate limit exceeded for IP: ${clientIp}`);
-    return res.status(429).json({ 
-      error: 'Too many feedback submissions. Please try again later.',
-      retryAfter: Math.ceil((rateLimit.reset - Date.now()) / 1000)
-    });
-  }
-  
   try {
+    // SECURITY: Rate limiting - 10 submissions per hour per IP
+    const clientIp = getClientIp(req);
+    const rateLimit = await checkFeedbackRateLimit(clientIp);
+    setRateLimitHeaders(res, rateLimit);
+    
+    if (!rateLimit.success) {
+      console.log(`[Feedback] Rate limit exceeded for IP: ${clientIp}`);
+      return res.status(429).json({ 
+        error: 'Too many feedback submissions. Please try again later.',
+        retryAfter: Math.ceil((rateLimit.reset - Date.now()) / 1000)
+      });
+    }
+
     const { audioQuery, audioId, freesound_urls, ratings } = req.body;
 
     // Validate required fields (either audioQuery OR audioId must be provided)

@@ -15,22 +15,22 @@ export default async function handler(req, res) {
   
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
-  // SECURITY: Rate limiting - 10 requests per minute per IP
-  const clientIp = getClientIp(req);
-  const rateLimit = await checkSearchRateLimit(clientIp);
-  setRateLimitHeaders(res, rateLimit);
-  
-  if (!rateLimit.success) {
-    console.log(`[Search] Rate limit exceeded for IP: ${clientIp}`);
-    return res.status(429).json({ 
-      error: 'Too many requests. Please try again later.',
-      retryAfter: Math.ceil((rateLimit.reset - Date.now()) / 1000)
-    });
-  }
-  
-  console.log(`[Search] Request from IP: ${clientIp}, remaining: ${rateLimit.remaining}/${rateLimit.limit}`);
-
   try {
+    // SECURITY: Rate limiting - 10 requests per minute per IP
+    const clientIp = getClientIp(req);
+    const rateLimit = await checkSearchRateLimit(clientIp);
+    setRateLimitHeaders(res, rateLimit);
+    
+    if (!rateLimit.success) {
+      console.log(`[Search] Rate limit exceeded for IP: ${clientIp}`);
+      return res.status(429).json({ 
+        error: 'Too many requests. Please try again later.',
+        retryAfter: Math.ceil((rateLimit.reset - Date.now()) / 1000)
+      });
+    }
+    
+    console.log(`[Search] Request from IP: ${clientIp}, remaining: ${rateLimit.remaining}/${rateLimit.limit}`);
+
     if (!apiKey) {
       console.error('[Search] ERROR: PINECONE_API_KEY not set');
       return res.status(500).json({ error: 'Server configuration error: Pinecone API key not configured' });

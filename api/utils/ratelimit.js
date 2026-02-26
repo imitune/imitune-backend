@@ -7,26 +7,30 @@ let redis;
 let searchRateLimiter;
 let feedbackRateLimiter;
 
-try {
-  redis = Redis.fromEnv();
-  
-  // Search API: 10 requests per minute per IP
-  searchRateLimiter = new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(10, '1 m'),
-    analytics: true,
-    prefix: 'ratelimit:search',
-  });
+if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+  try {
+    redis = Redis.fromEnv();
+    
+    // Search API: 10 requests per minute per IP
+    searchRateLimiter = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(10, '1 m'),
+      analytics: true,
+      prefix: 'ratelimit:search',
+    });
 
-  // Feedback API: 10 submissions per hour per IP
-  feedbackRateLimiter = new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(10, '1 h'),
-    analytics: true,
-    prefix: 'ratelimit:feedback',
-  });
-} catch (error) {
-  console.warn('Rate limiting not configured. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.');
+    // Feedback API: 10 submissions per hour per IP
+    feedbackRateLimiter = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(10, '1 h'),
+      analytics: true,
+      prefix: 'ratelimit:feedback',
+    });
+  } catch (error) {
+    console.warn('Rate limiting initialization failed:', error);
+  }
+} else {
+  console.warn('Rate limiting not configured. Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN.');
 }
 
 /**
