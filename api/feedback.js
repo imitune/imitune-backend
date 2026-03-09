@@ -26,7 +26,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const { audioQuery, audioId, freesound_urls, ratings } = req.body;
+    const { audioQuery, audioId, freesound_urls, ratings, result_contexts } = req.body;
 
     // Validate required fields (either audioQuery OR audioId must be provided)
     if (!freesound_urls || !ratings) {
@@ -45,6 +45,22 @@ export default async function handler(req, res) {
     // Check if arrays have the same length
     if (freesound_urls.length !== ratings.length) {
       return res.status(400).json({ error: 'freesound_urls and ratings arrays must have the same length' });
+    }
+
+    if (result_contexts !== undefined) {
+      if (!Array.isArray(result_contexts)) {
+        return res.status(400).json({ error: 'result_contexts must be an array when provided' });
+      }
+
+      if (result_contexts.length !== ratings.length) {
+        return res.status(400).json({ error: 'result_contexts and ratings arrays must have the same length' });
+      }
+
+      for (const context of result_contexts) {
+        if (context !== null && (typeof context !== 'object' || Array.isArray(context))) {
+          return res.status(400).json({ error: 'Each result_contexts entry must be an object or null' });
+        }
+      }
     }
 
     // Validate rating values (like, dislike, or null only)
@@ -126,6 +142,7 @@ export default async function handler(req, res) {
       audioId: uniqueId,  // Unique identifier for the audio query
       freesound_urls: freesound_urls, // Store as array
       ratings: ratings, // Store as array
+      result_contexts: result_contexts || null,
       createdAt: new Date().toISOString(),
       isUpdate: !!audioId, // Flag to indicate if this is an update
     };

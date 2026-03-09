@@ -4,7 +4,107 @@ import { checkSearchRateLimit, getClientIp, setRateLimitHeaders } from './utils/
 // Pinecone configuration from environment variables
 // PINECONE_INDEX_HOST bypasses the control plane lookup for faster, more reliable queries
 const apiKey = process.env.PINECONE_API_KEY;
-const indexHost = process.env.PINECONE_INDEX_HOST;
+const defaultIndexHost = process.env.PINECONE_INDEX_HOST;
+const devModeEnabled = process.env.ENABLE_DEV_MODE === 'true';
+
+function normalizeHost(host) {
+  return host.startsWith('https://') ? host : `https://${host}`;
+}
+
+function parseRequestedIndexes(indexes) {
+  if (!indexes) return [];
+  if (!Array.isArray(indexes)) return null;
+
+  const normalizedIndexes = indexes
+    .filter(indexId => typeof indexId === 'string')
+    .map(indexId => indexId.trim())
+    .filter(Boolean);
+
+  return normalizedIndexes;
+}
+
+function getDevIndexConfigs() {
+  const rawJson = process.env.PINECONE_DEV_INDEXES_JSON;
+  if (!rawJson) {
+    throw new Error('PINECONE_DEV_INDEXES_JSON is not configured');
+  }
+
+  let parsedConfig;
+  try {
+    parsedConfig = JSON.parse(rawJson);
+  } catch (error) {
+    throw new Error('PINECONE_DEV_INDEXES_JSON contains invalid JSON');
+  }
+
+  if (!parsedConfig || typeof parsedConfig !== 'object' || Array.isArray(parsedConfig)) {
+    throw new Error('PINECONE_DEV_INDEXES_JSON must be an object keyed by index id');
+  }
+
+  const configuredOrder = (process.env.PINECONE_DEV_INDEX_ORDER || '')
+    .split(',')
+    .map(indexId => indexId.trim())
+    .filter(Boolean);
+  const orderedIds = configuredOrder.length ? configuredOrder : Object.keys(parsedConfig);
+
+  return orderedIds.map(indexId => {
+    const rawEntry = parsedConfig[indexId];
+    if (!rawEntry) {
+      throw new Error(`PINECONE_DEV_INDEX_ORDER references unknown index: ${indexId}`);
+    }
+
+    if (typeof rawEntry === 'string') {
+      return {
+        indexId,
+        indexLabel: indexId,
+        host: rawEntry,
+      };
+    }
+
+    if (typeof rawEntry === 'object' && !Array.isArray(rawEntry) && typeof rawEntry.host === 'string') {
+      return {
+        indexId,
+        indexLabel: typeof rawEntry.label === 'string' && rawEntry.label.trim() ? rawEntry.label.trim() : indexId,
+        host: rawEntry.host,
+      };
+    }
+
+    throw new Error(`Invalid dev index config for ${indexId}`);
+  });
+}
+
+async function queryIndex({ host, indexId, indexLabel }, embedding) {
+  const response = await fetch(`${normalizeHost(host)}/query`, {
+    method: 'POST',
+    headers: {
+      'Api-Key': apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      topK: 3,
+      vector: embedding,
+      includeMetadata: true,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Pinecone API error for ${indexId}: ${response.status} - ${errorText}`);
+  }
+
+  const queryResponse = await response.json();
+  const results = (queryResponse.matches || []).map(match => ({
+    id: match.id,
+    score: match.score,
+    freesound_url: match.metadata?.freesound_url || '',
+  }));
+
+  return {
+    indexId,
+    indexLabel,
+    results,
+    error: null,
+  };
+}
 
 export default async function handler(req, res) {
   // SECURITY: Validate origin and set CORS headers
@@ -35,13 +135,14 @@ export default async function handler(req, res) {
       console.error('[Search] ERROR: PINECONE_API_KEY not set');
       return res.status(500).json({ error: 'Server configuration error: Pinecone API key not configured' });
     }
-    
-    if (!indexHost) {
-      console.error('[Search] ERROR: PINECONE_INDEX_HOST not set');
-      return res.status(500).json({ error: 'Server configuration error: Pinecone index host not configured' });
-    }
 
     const { embedding } = req.body;
+    const requestedMode = typeof req.body?.mode === 'string' ? req.body.mode : 'single';
+    const requestedIndexes = parseRequestedIndexes(req.body?.indexes);
+
+    if (requestedIndexes === null) {
+      return res.status(400).json({ error: 'indexes must be an array of strings when provided' });
+    }
     
     // SECURITY: Validate embedding exists and is an array
     if (!embedding || !Array.isArray(embedding)) {
@@ -64,37 +165,60 @@ export default async function handler(req, res) {
 
     console.log(`[Search] Embedding size: ${embedding.length}`);
 
-    // Direct REST API call to Pinecone (bypasses SDK control plane lookup)
-    const host = indexHost.startsWith('https://') ? indexHost : `https://${indexHost}`;
-    const response = await fetch(`${host}/query`, {
-      method: 'POST',
-      headers: {
-        'Api-Key': apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        topK: 3,
-        vector: embedding,
-        includeMetadata: true,
-      }),
-    });
+    const isDevRequest = requestedMode === 'dev' || requestedIndexes.length > 0;
+    if (isDevRequest) {
+      if (!devModeEnabled) {
+        return res.status(403).json({ error: 'Dev mode is not enabled on this backend deployment' });
+      }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[Search] Pinecone API error:', response.status, errorText);
-      throw new Error(`Pinecone API error: ${response.status} - ${errorText}`);
+      const availableIndexConfigs = getDevIndexConfigs();
+      const selectedIndexConfigs = requestedIndexes.length
+        ? requestedIndexes.map(indexId => {
+            const match = availableIndexConfigs.find(config => config.indexId === indexId);
+            if (!match) {
+              throw new Error(`Unknown dev index requested: ${indexId}`);
+            }
+            return match;
+          })
+        : availableIndexConfigs;
+
+      const settledRows = await Promise.allSettled(
+        selectedIndexConfigs.map(config => queryIndex(config, embedding))
+      );
+
+      const rows = settledRows.map((result, index) => {
+        const config = selectedIndexConfigs[index];
+        if (result.status === 'fulfilled') {
+          return result.value;
+        }
+
+        console.error(`[Search] Dev index query failed for ${config.indexId}:`, result.reason);
+        return {
+          indexId: config.indexId,
+          indexLabel: config.indexLabel,
+          results: [],
+          error: result.reason instanceof Error ? result.reason.message : 'Unknown error',
+        };
+      });
+
+      return res.status(200).json({
+        mode: 'multi-index',
+        rows,
+      });
     }
 
-    const queryResponse = await response.json();
+    if (!defaultIndexHost) {
+      console.error('[Search] ERROR: PINECONE_INDEX_HOST not set');
+      return res.status(500).json({ error: 'Server configuration error: Pinecone index host not configured' });
+    }
 
-    // Process the results to match the required format
-    const results = (queryResponse.matches || []).map(match => ({
-      id: match.id,
-      score: match.score,
-      freesound_url: match.metadata?.freesound_url || '',
-    }));
+    const defaultResult = await queryIndex({
+      host: defaultIndexHost,
+      indexId: 'default',
+      indexLabel: 'Default',
+    }, embedding);
 
-    return res.status(200).json({ results });
+    return res.status(200).json({ results: defaultResult.results });
 
   } catch (error) {
     console.error('[Search] Error occurred:', error);

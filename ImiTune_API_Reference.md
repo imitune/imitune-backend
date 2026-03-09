@@ -20,6 +20,41 @@ Send a JSON object with the embedding vector.
 }
 ```
 
+#### **Optional dev comparison request**
+
+When the backend is deployed with `ENABLE_DEV_MODE=true`, the same endpoint can return grouped comparison results for multiple Pinecone indexes.
+
+```json
+{
+  "embedding": [0.123, -0.456, 0.789, "..."],
+  "mode": "dev"
+}
+```
+
+Optional `indexes` can also be sent as an array of configured index ids.
+
+#### **Dev comparison response (200 OK)**
+
+```json
+{
+  "mode": "multi-index",
+  "rows": [
+    {
+      "indexId": "baseline",
+      "indexLabel": "Baseline",
+      "results": [
+        {
+          "id": "000000045123",
+          "score": 0.98765,
+          "freesound_url": "https://freesound.org/people/user/sounds/12345/"
+        }
+      ],
+      "error": null
+    }
+  ]
+}
+```
+
 #### **Success Response (200 OK)**
 The server will return a list of matching sounds.
 ```json
@@ -71,6 +106,21 @@ Send a JSON object with audio data and feedback ratings.
     "like",
     null,
     "dislike"
+  ],
+  "result_contexts": [
+    {
+      "route": "dev",
+      "indexId": "baseline",
+      "indexLabel": "Baseline",
+      "rank": 1,
+      "freesound_url": "https://freesound.org/people/user/sounds/12345/"
+    },
+    null,
+    {
+      "route": "default",
+      "rank": 3,
+      "freesound_url": "https://freesound.org/people/user/sounds/67890/"
+    }
   ]
 }
 ```
