@@ -6,6 +6,7 @@ import { checkSearchRateLimit, getClientIp, setRateLimitHeaders } from './utils/
 const apiKey = process.env.PINECONE_API_KEY;
 const defaultIndexHost = process.env.PINECONE_INDEX_HOST;
 const devModeEnabled = process.env.ENABLE_DEV_MODE === 'true';
+const TOP_K_MATCHES = 4;
 
 function normalizeHost(host) {
   return host.startsWith('https://') ? host : `https://${host}`;
@@ -80,7 +81,7 @@ async function queryIndex({ host, indexId, indexLabel }, embedding) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      topK: 3,
+      topK: TOP_K_MATCHES,
       vector: embedding,
       includeMetadata: true,
     }),
