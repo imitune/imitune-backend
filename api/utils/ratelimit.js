@@ -62,11 +62,17 @@ export function getClientIp(req) {
 export async function checkSearchRateLimit(identifier) {
   if (!searchRateLimiter) {
     // If rate limiting is not configured, allow all requests
-    console.warn('Rate limiter not initialized, allowing request');
+    console.warn('[RateLimit] Search rate limiter not initialized, allowing request');
     return { success: true, limit: 0, remaining: 0, reset: 0 };
   }
   
-  return await searchRateLimiter.limit(identifier);
+  try {
+    return await searchRateLimiter.limit(identifier);
+  } catch (error) {
+    console.error('[RateLimit] Upstash Redis failure for Search API:', error);
+    // Fail-open strategy: allow the request if the rate limiter is down
+    return { success: true, limit: 0, remaining: 0, reset: 0 };
+  }
 }
 
 /**
@@ -77,11 +83,17 @@ export async function checkSearchRateLimit(identifier) {
 export async function checkFeedbackRateLimit(identifier) {
   if (!feedbackRateLimiter) {
     // If rate limiting is not configured, allow all requests
-    console.warn('Rate limiter not initialized, allowing request');
+    console.warn('[RateLimit] Feedback rate limiter not initialized, allowing request');
     return { success: true, limit: 0, remaining: 0, reset: 0 };
   }
   
-  return await feedbackRateLimiter.limit(identifier);
+  try {
+    return await feedbackRateLimiter.limit(identifier);
+  } catch (error) {
+    console.error('[RateLimit] Upstash Redis failure for Feedback API:', error);
+    // Fail-open strategy: allow the request if the rate limiter is down
+    return { success: true, limit: 0, remaining: 0, reset: 0 };
+  }
 }
 
 /**

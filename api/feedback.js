@@ -168,18 +168,24 @@ export default async function handler(req, res) {
     console.error('[Feedback] Error occurred while handling feedback:', error);
     console.error('[Feedback] Error name:', error?.name);
     console.error('[Feedback] Error message:', error?.message);
-    console.error('[Feedback] Error stack:', error?.stack);
     
     // Provide more specific error messages for common issues
-    let errorMessage = 'Internal server error';
+    let errorMessage = 'An internal server error occurred. Please try again later.';
     let statusCode = 500;
     
+    const isServiceError = error?.name === 'BlobError' || 
+                           error?.message?.includes('blob') || 
+                           error?.message?.includes('fetch') ||
+                           error?.message?.includes('network error');
+
     if (error?.message?.includes('BLOB_READ_WRITE_TOKEN')) {
       errorMessage = 'Storage configuration error. Please contact support.';
+      statusCode = 503; // Service is unavailable due to configuration
       console.error('[Feedback] CRITICAL: Vercel Blob token not configured!');
-    } else if (error?.name === 'BlobError' || error?.message?.includes('blob')) {
-      errorMessage = 'Failed to store feedback. Please try again.';
-      console.error('[Feedback] Blob storage error:', error);
+    } else if (isServiceError) {
+      errorMessage = 'One of the services used seems to be down right now (Storage). Please try again later.';
+      statusCode = 503;
+      console.error('[Feedback] Blob storage service error detected');
     }
     
     return res.status(statusCode).json({ error: errorMessage });

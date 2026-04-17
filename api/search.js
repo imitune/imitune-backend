@@ -74,18 +74,23 @@ function getDevIndexConfigs() {
 }
 
 async function queryIndex({ host, indexId, indexLabel }, embedding) {
-  const response = await fetch(`${normalizeHost(host)}/query`, {
-    method: 'POST',
-    headers: {
-      'Api-Key': apiKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      topK: TOP_K_MATCHES,
-      vector: embedding,
-      includeMetadata: true,
-    }),
-  });
+  let response;
+  try {
+    response = await fetch(`${normalizeHost(host)}/query`, {
+      method: 'POST',
+      headers: {
+        'Api-Key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        topK: TOP_K_MATCHES,
+        vector: embedding,
+        includeMetadata: true,
+      }),
+    });
+  } catch (e) {
+    throw new Error(`Pinecone network error for ${indexId}: ${e.message}`);
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -223,6 +228,18 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('[Search] Error occurred:', error);
+    
+    // Distinguish between service outages and other internal errors
+    const isServiceError = error.message?.includes('Pinecone') || 
+                           error.message?.includes('fetch') || 
+                           error.message?.includes('network error');
+    
+    if (isServiceError) {
+      return res.status(503).json({ 
+        error: 'One of the services used seems to be down right now (Search). Please try again later.' 
+      });
+    }
+
     return res.status(500).json({ 
       error: 'An internal server error occurred. Please try again later.' 
     });
